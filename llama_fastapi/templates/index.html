@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LLaMA Chat</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="app">
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <h3>Chats</h3>
+        <button onclick="newChat()">+ New Chat</button>
+        <div id="chat-list"></div>
+    </div>
+
+    <!-- Main Chat -->
+    <div class="chat-area">
+
+        <div id="chat-box"></div>
+
+        <div class="input-box">
+            <input type="text" id="user-input" placeholder="Ask anything..." />
+            <button onclick="sendMessage()">➤</button>
+            <!-- <button onclick="newChat()">+ New Chat</button> -->
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+    let sessionId = null;
+
+// Init session
+async function init() {
+    const res = await fetch("/new-session");
+    const data = await res.json();
+    sessionId = data.session_id;
+}
+
+init();
+
+// Add message
+function addMessage(text, sender) {
+    const chatBox = document.getElementById("chat-box");
+
+    const div = document.createElement("div");
+    div.className = sender === "user" ? "message user" : "message bot";
+
+    div.innerText = text;
+    chatBox.appendChild(div);
+}
+
+// New chat
+async function newChat() {
+    document.getElementById("chat-box").innerHTML = "";
+
+    const res = await fetch("/new-session");
+    const data = await res.json();
+
+    sessionId = data.session_id;
+}
+
+// Send message (NO CLEAR)
+async function sendMessage() {
+    const input = document.getElementById("user-input");
+    const chatBox = document.getElementById("chat-box");
+
+    let userText = input.value.trim();
+    if (!userText) return;
+
+    addMessage(userText, "user");
+    input.value = "";
+
+    try {
+        const response = await fetch("/chat", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                prompt: userText,
+                session_id: sessionId
+            })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        let botDiv = document.createElement("div");
+        botDiv.className = "message bot";
+        chatBox.appendChild(botDiv);
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            botDiv.innerText += decoder.decode(value);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+    } catch (error) {
+        addMessage("Error: " + error.message, "bot");
+    }
+}
+
+// Enter key
+document.getElementById("user-input").addEventListener("keypress", function(e) {
+    if (e.key === "Enter") {
+        sendMessage();
+    }
+});
+</script>
+
+</body>
+</html>
